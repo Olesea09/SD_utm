@@ -1,0 +1,7 @@
+.venv/
+data/interim/
+data/processed/
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
+CLAUDE.md
