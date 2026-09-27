@@ -1,4 +1,4 @@
-# Potrivirea probabilistă a înregistrărilor între registrele farmaceutice oficiale ale Republicii Moldova
+# Integrarea probabilistă a registrelor farmaceutice oficiale din Republica Moldova și analiza prețurilor medicamentelor echivalente
 
 Proiect la disciplina *Știința datelor* (UTM, grupa SD251M) — Olesea Popa.
 Constituie Partea I (cercetare) a tezei de master *„Instrument digital bazat pe metode de știința datelor pentru analiza pieței farmaceutice și compararea medicamentelor echivalente”*.
@@ -21,7 +21,11 @@ data/raw/          date originale, needitate
 data/interim/      date curățate (generate)
 src/ingest.py      pasul 1 — citirea surselor
 src/clean.py       pasul 2 — curățarea de bază, preț pe unitate, grupuri de echivalență
+src/normalize.py   pasul 3 — normalizarea formei, dozei și denumirii
+src/labeling.py    eșantionul de 200 de rânduri CNAM pentru etichetare manuală (rulat o singură dată)
+data/labels/       etichetele manuale (setul de evaluare finală) — se păstrează în git
 notebooks/01_eda.ipynb   analiza exploratorie (cu constatări)
+notebooks/02_normalizare.ipynb   normalizarea și re-măsurarea ratei de potrivire
 reports/figures/   figuri generate
 run_pipeline.py    rulează totul de la zero
 ```
