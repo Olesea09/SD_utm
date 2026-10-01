@@ -166,3 +166,129 @@ def equivalence_key_norm(df: pd.DataFrame) -> pd.Series:
     is_combo = dci.str.startswith("combina", na=False)
     base = dci.where(~is_combo, "atc:" + key_text(df["atc"]).fillna("?"))
     return base + " | " + df["doza_norm"].fillna("?") + " | " + df["forma_norm"].fillna("?")
+
+
+# ---------------------------------------------------------------------------------------------
+# 5. Câmpuri suplimentare pentru potrivire: cheia DCI, firma, divizarea (adăugate în notebook 03)
+# ---------------------------------------------------------------------------------------------
+# Cuvinte care nu identifică substanța: sărurile și formele chimice („Metformini hydrochloridum”
+# = „METFORMINUM”) și legăturile dintre componente.
+DCI_STOP = {
+    "acidum", "acidi", "natrii", "natrium", "natricum", "natrici", "dinatricum", "kalii", "kalium",
+    "calcii", "calcium", "magnesii", "hydrochloridum", "hydrochloridi", "hydrobromidum", "sulfas",
+    "propionas", "humanum", "dihydricum", "monohydricum", "trihydricum", "bromidum", "maleas",
+    "mesilas", "besilas", "fumaras", "tartras", "citras", "phosphas", "acetas", "succinas",
+    "plus", "si", "cu",
+}
+
+
+def _dci_stem_one(x):
+    if not isinstance(x, str) or x.startswith("combina"):   # „Combinaţie” nu identifică substanța
+        return None
+    stems = set()
+    for comp in re.split(r"\s*(?:\+|\bplus\b|,)\s*", x):
+        words = [w for w in re.findall(r"[a-z]+", comp) if w not in DCI_STOP and len(w) > 2]
+        if words:
+            stems.add(words[0][:6])                         # rădăcina latină: primele 6 litere
+    return "+".join(sorted(stems)) or None
+
+
+def dci_stem(s: pd.Series) -> pd.Series:
+    """Cheia DCI pe rădăcini: „Metformini hydrochloridum” și „METFORMINUM” -> „metfor”;
+    „AMLODIPINUM+VALSARTANUM” și „Valsartanum + Amlodipinum” -> „amlodi+valsar”; „Combinaţie” -> NaN."""
+    return strip_accents(key_text(s)).map(_dci_stem_one)
+
+
+# Formele juridice și cuvintele generice din numele firmelor nu deosebesc firmele între ele.
+FIRM_STOP = {
+    "srl", "sa", "s", "a", "r", "l", "ltd", "limited", "pvt", "llc", "gmbh", "ag", "plc", "sc", "ics",
+    "sap", "jsc", "co", "inc", "spa", "p", "kgaa", "as", "dd", "d", "o", "ks", "k", "kg", "bv", "nv",
+    "ooo", "oao", "zao", "pao", "ao", "sl", "slu", "u", "sro", "doo", "se", "ab", "oy", "oyj", "corp",
+    "corporation", "pharmaceutical", "pharmaceuticals", "pharma", "pharm", "farm", "laboratories",
+    "laboratorios", "laboratorio", "industries", "industry", "and", "ve", "company", "int",
+    "international", "sas", "sarl", "spol", "zo", "sp", "tic", "san",
+}
+
+
+def norm_firma(s: pd.Series, countries: set) -> pd.Series:
+    """Numele firmei comparabil între surse: fără partea „(PROD: ...)”, fără țară, fără forma juridică.
+    „Balkan Pharmaceuticals SRL, Republica Moldova(PROD: ...)” și „SC Balkan Pharmaceuticals SRL” -> „balkan”.
+    `countries`: țările scrise ca în coloanele „tara”, trecute prin strip_accents(key_text(...))."""
+    t = strip_accents(key_text(s)).str.replace(r"\(\s*prod\.?:.*$", "", regex=True)
+
+    def one(x):
+        if not isinstance(x, str):
+            return None
+        x = " ".join(p.strip() for p in x.split(",") if p.strip() not in countries)
+        words = [w for w in re.findall(r"[a-z0-9]+", x) if w not in FIRM_STOP and len(w) > 1]
+        return " ".join(words) or None
+    return t.map(one)
+
+
+def firm_set(df: pd.DataFrame, cols: list, countries: set) -> pd.Series:
+    """Toate firmele asociate unui rând (deținător și producători), normalizate, separate prin „|”.
+    Formatele acceptate: „Firma A, Țara(PROD: Firma B, Țara; ...)”, „Firma A (prod.: Firma B, Țara)”
+    și lista Nomenclatorului „Firma A, Țara; Firma B, Țara”. Fiecare bucată trece prin norm_firma."""
+    def pieces(x):
+        if not isinstance(x, str):
+            return []
+        x = strip_accents(pd.Series([x.lower()])).iloc[0]
+        main, _, prod = x.partition("(prod")
+        prod = re.sub(r"^\.?:", "", prod).replace(")", " ").replace("(", " ")
+        return [p for p in re.split(r";", main) + re.split(r";", prod) if p.strip(" ,")]
+
+    out = []
+    for _, row in df[cols].iterrows():
+        ps = [p for c in cols for p in pieces(row[c])]
+        names = norm_firma(pd.Series(ps, dtype="object"), countries).dropna() if ps else []
+        out.append("|".join(dict.fromkeys(names)) or None)
+    return pd.Series(out, index=df.index)
+
+
+_VOL = re.compile(r"(\d+(?:\.\d+)?)\s*(ml|l|g|doze)\b")
+_N = re.compile(r"n\s*(\d+)(?:\s*x\s*(\d+))?")
+
+
+def _volume(x):
+    """„100 ml” -> „100 ml”; „1 l” -> „1000 ml”; „20g” -> „20 ml” (g = ml doar pentru potrivire); „60 doze”."""
+    if not isinstance(x, str):
+        return None
+    m = _VOL.search(x)
+    if not m:
+        return None
+    v, u = float(m.group(1)), m.group(2)
+    v, u = (v * 1000, "ml") if u == "l" else (v, "doze" if u == "doze" else "ml")
+    return f"{_fmt(v)} {u}"
+
+
+def norm_divizare(div: pd.Series, vol: pd.Series) -> pd.DataFrame:
+    """Divizarea ca număr total de unități + volumul, separat.
+    „N14x2” și „N28” -> 28; „60 ml N1” -> 1 unitate și volumul 60 ml; „N1 + N1” (trusă) -> 1;
+    volumul se ia din coloana „volum”, iar dacă lipsește, din textul divizării."""
+    t = strip_accents(key_text(div)).str.replace(",", ".", regex=False)
+    t_no_par = t.str.replace(r"\([^)]*\)", " ", regex=True)            # „N1(flacon PP)” -> „N1”
+
+    def units(x):
+        if not isinstance(x, str):
+            return None
+        m = _N.search(x)                                               # primul grup N (la truse: prima componentă)
+        return float(int(m.group(1)) * (int(m.group(2)) if m.group(2) else 1)) if m else None
+    v = strip_accents(key_text(vol)).str.replace(",", ".", regex=False).map(_volume)
+    return pd.DataFrame({"unitati_norm": t_no_par.map(units),
+                         "volum_norm": v.where(v.notna(), t_no_par.map(_volume))}, index=div.index)
+
+
+def normalize_linkage(df: pd.DataFrame, firm_cols: list, countries: set) -> pd.DataFrame:
+    """Adaugă coloanele folosite la blocare și comparare: dci_stem, firma_norm (deținătorul),
+    firme (deținător + producători), unitati_norm, volum_norm. Coloanele originale rămân neschimbate."""
+    df = df.copy()
+    df["dci_stem"] = dci_stem(df["dci"])
+    df["firma_norm"] = norm_firma(df[firm_cols[0]], countries)
+    df["firme"] = firm_set(df, firm_cols, countries)
+    df[["unitati_norm", "volum_norm"]] = norm_divizare(df["divizare"], df["volum"])
+    return df
+
+
+def country_set(*cols: pd.Series) -> set:
+    """Țările care apar în coloanele „tara” ale surselor, în forma folosită de norm_firma."""
+    return set(strip_accents(key_text(pd.concat(cols))).dropna())
