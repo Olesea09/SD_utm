@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 NOTEBOOKS = ["notebooks/01_eda.ipynb", "notebooks/02_normalizare.ipynb",
-             "notebooks/03_semisintetic_blocare_comparare.ipynb"]  # următoarele etape se adaugă aici
+             "notebooks/03_semisintetic_blocare_comparare.ipynb", "notebooks/04_potrivire_modele.ipynb"]  # următoarele etape se adaugă aici
 
 for nb in NOTEBOOKS:
     print(f"==> {nb}")
