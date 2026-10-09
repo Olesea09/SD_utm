@@ -28,6 +28,7 @@ Prețurile din Catalog sunt **prețuri de producător** (ex works), nu prețuri 
 | 7. Potrivire | `src/fellegi_sunter.py`, `src/models.py` | `04_potrivire_modele` | Fellegi–Sunter (EM clasic, unu-la-unu, bootstrap, Gibbs bayesian); regresie logistică, SVM, rețea neuronală |
 | 8. Evaluare | `src/evaluation.py` | `05_evaluare_explicabilitate` | evaluare pe 200 de rânduri CNAM etichetate manual, reponderată pe straturi; SHAP, LIME; alegerea modelului |
 | 9. Prețuri | `src/prices.py` | `06_analiza_preturilor` | dispersia prețurilor, compensat vs. necompensat, concurență (efecte fixe + bootstrap; modele bayesiene ierarhice în PyMC) |
+| 10. Dashboard | `src/dashboard.py`, `src/results.py` | — | `reports/dashboard.html`: prezentarea rezultatelor (ecrane parcurse cu săgețile) și căutarea medicamentelor echivalente, generată din rezultatele pipeline-ului |
 
 `src/labeling.py` a generat o singură dată eșantionul pentru etichetarea manuală și nu face parte din pipeline. Etichetele se află în `data/labels/` și sunt folosite **doar** la evaluarea finală.
 
@@ -49,9 +50,12 @@ pip install -r requirements.txt
 python run_pipeline.py
 ```
 
-`run_pipeline.py` rulează notebook-urile 01–06, în ordine, din datele brute (aproximativ 15 minute). Rezultatele intermediare se scriu în `data/interim/`, iar cele finale în `data/processed/`:
+`run_pipeline.py` rulează notebook-urile 01–06, în ordine, din datele brute, apoi generează dashboard-ul (aproximativ 15 minute). Rezultatele intermediare se scriu în `data/interim/`, iar cele finale în `data/processed/`:
 - `cnam_legat_nomenclator.csv`: fiecare rând CNAM cu codul din Nomenclator, probabilitatea legăturii, intervalul credibil și indicatorul de verificare manuală;
-- `grupuri_echivalenta_preturi.csv`: statisticile de preț pe grupuri de echivalență.
+- `grupuri_echivalenta_preturi.csv`: statisticile de preț pe grupuri de echivalență;
+- `rezultate.json`: cifrele principale ale fiecărui pas, scrise de notebook-uri și citite de dashboard.
+
+Dashboard-ul `reports/dashboard.html` se deschide direct în browser, fără internet (F: ecran complet, N: notițe).
 
 Ambele foldere sunt generate și nu sunt păstrate în git.
 

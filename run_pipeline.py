@@ -15,6 +15,8 @@ NOTEBOOKS = ["notebooks/01_eda.ipynb", "notebooks/02_normalizare.ipynb",
 
 for nb in NOTEBOOKS:
     print(f"==> {nb}")
-    subprocess.run([sys.executable, "-m", "jupyter", "nbconvert", "--to", "notebook", "--execute",
+    subprocess.run([sys.executable, "-m", "nbconvert", "--to", "notebook", "--execute",
                     "--ExecutePreprocessor.timeout=1800", "--inplace", str(ROOT / nb)], check=True)
-print("Gata. Figurile sunt în reports/figures/, datele curățate în data/interim/.")
+print("==> src/dashboard.py")
+subprocess.run([sys.executable, str(ROOT / "src" / "dashboard.py")], check=True)   # ultimul pas: dashboard-ul de prezentare
+print("Gata. Figurile sunt în reports/figures/, datele curățate în data/interim/, dashboard-ul în reports/dashboard.html.")
